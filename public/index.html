@@ -3,69 +3,94 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pokémon Restock Dashboard</title>
+  <title>Restock Monitor</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<div class="shell">
-  <header>
-    <div><span class="eyebrow">LIVE INVENTORY MONITOR</span><h1>Pokémon Restock Dashboard</h1><p>Micro Center stock alerts for Discord, email, and browser push.</p></div>
-    <div class="actions"><button id="refresh">Refresh</button><button class="primary" id="checkAll">Check All</button></div>
-  </header>
-
-  <section class="stats">
-    <div><span>Watching</span><strong id="watching">0</strong></div>
-    <div><span>In Stock</span><strong id="inStock">0</strong></div>
-    <div><span>Out of Stock</span><strong id="outStock">0</strong></div>
-    <div><span>Push Devices</span><strong id="devices">0</strong></div>
-    <div><span>Home Agent</span><strong id="agentStatus">—</strong></div>
-  </section>
-
-  <section class="panel notify">
-    <div><span class="eyebrow">NOTIFICATIONS</span><h2>Test each alert channel</h2><p>Confirm Discord, email, and browser push independently.</p></div>
-    <div class="test-actions">
-      <button id="testDiscord">Test Discord</button>
-      <button id="testEmail">Test Email</button>
-      <button id="testPush">Test Browser Push</button>
-      <button class="primary" id="push">Enable Browser Push</button>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">R</div><div><strong>RESTOCK</strong><span>MONITOR</span></div></div>
+    <nav>
+      <a class="active" href="#products">▦ <span>Watched Products</span></a>
+      <a href="#add">＋ <span>Add Product</span></a>
+      <a href="#notifications">♢ <span>Notifications</span></a>
+    </nav>
+    <div class="side-tests" id="notifications">
+      <p>NOTIFICATIONS</p>
+      <button id="testDiscord" class="test discord">Test Discord</button>
+      <button id="testEmail" class="test email">Test Email</button>
+      <button id="testPush" class="test push">Test Browser Push</button>
+      <button id="push" class="test browser">Enable Browser Push</button>
     </div>
-    <div id="serviceBadges" class="badges"></div>
-  </section>
-
-  <section class="panel add-panel">
-    <div><span class="eyebrow">ADD PRODUCT</span><h2>Watch another Micro Center product</h2></div>
-    <form id="addForm"><input id="url" type="url" required placeholder="https://www.microcenter.com/product/..."><button class="primary">Add Watch</button></form>
-    <p id="message"></p>
-  </section>
-
-  <section class="panel">
-    <div class="sectionTitle">
-      <div><span class="eyebrow">ACTIVE MONITORING</span><h2>Watched Products</h2></div>
-      <span class="chip" id="store">IL - Chicago</span>
+    <div class="system-card">
+      <div><span class="system-dot"></span><strong>System Status</strong></div>
+      <p>Home Agent <b id="agentStatus">—</b></p>
+      <p>Products <b id="watching">0</b></p>
+      <p>Push Devices <b id="devices">0</b></p>
     </div>
-    <div class="filters">
-      <input id="search" type="search" placeholder="Search product name or SKU">
-      <select id="statusFilter"><option value="all">All statuses</option><option value="in_stock">In Stock</option><option value="out_of_stock">Out of Stock</option><option value="unknown">Unknown</option><option value="paused">Paused</option></select>
-      <select id="categoryFilter"><option value="all">All categories</option></select>
-      <select id="sort"><option value="recent">Recently checked</option><option value="alert">Recently alerted</option><option value="name">Product name</option><option value="status">Stock status</option></select>
-    </div>
-    <div id="grid" class="grid"></div>
-  </section>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><span class="eyebrow">LIVE INVENTORY MONITOR</span><h1>Watched Products</h1><p>Micro Center stock monitoring for Discord, email, and browser push.</p></div>
+      <div class="header-actions"><button id="refresh">Refresh</button><button class="primary" id="checkAll">Check All Products</button></div>
+    </header>
+
+    <section class="summary-row">
+      <div><span>Watching</span><strong id="watchingTop">0</strong></div>
+      <div><span>In Stock</span><strong id="inStock">0</strong></div>
+      <div><span>Out of Stock</span><strong id="outStock">0</strong></div>
+      <div><span>Selected Store</span><strong class="store-value" id="store">IL - Chicago</strong></div>
+    </section>
+
+    <section class="add-panel" id="add">
+      <div><span class="eyebrow">ADD PRODUCT</span><h2>Watch another Micro Center product</h2></div>
+      <form id="addForm"><input id="url" type="url" required placeholder="Paste a Micro Center product URL"><button class="primary">Add Watch</button></form>
+      <p id="message"></p>
+    </section>
+
+    <section id="products">
+      <div class="filterbar">
+        <input id="search" type="search" placeholder="Search by product name or SKU…">
+        <select id="statusFilter"><option value="all">All Statuses</option><option value="in_stock">In Stock</option><option value="out_of_stock">Out of Stock</option><option value="unknown">Unknown</option><option value="paused">Paused</option></select>
+        <select id="categoryFilter"><option value="all">All Categories</option></select>
+        <select id="sort"><option value="recent">Recently Checked</option><option value="alert">Recently Alerted</option><option value="name">Product Name</option><option value="status">Stock Status</option></select>
+      </div>
+      <div id="serviceBadges" class="service-badges"></div>
+      <div id="grid" class="product-grid"></div>
+    </section>
+  </main>
 </div>
 
 <template id="card">
-  <article class="card">
-    <div class="media"><img><span>PKMN</span></div>
-    <div class="content">
-      <div class="row"><b class="status"></b><small class="id"></small></div>
-      <h3></h3>
-      <div class="price-row"><p class="price"></p><span class="category"></span></div>
-      <p class="meta"></p>
-      <p class="availability"></p>
-      <div class="timing"><p class="checked"></p><p class="alerted"></p></div>
-      <details class="history"><summary>Stock history</summary><div class="history-list"></div></details>
-      <a class="product-link" target="_blank" rel="noopener">View at Micro Center</a>
-      <div class="actions card-actions"><button class="check">Check</button><button class="toggle">Pause</button><button class="danger remove">Remove</button></div>
+  <article class="product-card">
+    <div class="product-overview">
+      <div class="product-image-wrap">
+        <span class="status"></span>
+        <img class="product-image">
+        <div class="image-fallback">PRODUCT IMAGE</div>
+      </div>
+      <div class="product-info">
+        <small class="id"></small>
+        <h3></h3>
+        <span class="category"></span>
+        <p class="meta"></p>
+        <p class="price"></p>
+      </div>
+    </div>
+    <div class="availability"></div>
+    <div class="metrics">
+      <div class="checked"></div>
+      <div class="alerted"></div>
+      <div><span>Alerts</span><strong class="alert-count">0</strong><small>Total sent</small></div>
+      <div><span>Monitoring</span><strong class="monitor-state">Active</strong><small>Current state</small></div>
+    </div>
+    <details class="history"><summary>Stock History</summary><div class="history-list"></div></details>
+    <div class="card-footer">
+      <a class="product-link" target="_blank" rel="noopener">View Product ↗</a>
+      <button class="check">Check Now</button>
+      <button class="toggle">Pause</button>
+      <button class="danger remove">Remove</button>
     </div>
   </article>
 </template>

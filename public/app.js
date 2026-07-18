@@ -1,6 +1,6 @@
 const $ = s => document.querySelector(s);
 const els = {
-  watching: $("#watching"), inStock: $("#inStock"), outStock: $("#outStock"), devices: $("#devices"),
+  watching: $("#watching"), watchingTop: $("#watchingTop"), inStock: $("#inStock"), outStock: $("#outStock"), devices: $("#devices"),
   agentStatus: $("#agentStatus"), store: $("#store"), grid: $("#grid"), template: $("#card"),
   form: $("#addForm"), url: $("#url"), message: $("#message"), refresh: $("#refresh"), checkAll: $("#checkAll"),
   push: $("#push"), badges: $("#serviceBadges"), toast: $("#toast"), search: $("#search"),
@@ -48,22 +48,28 @@ function historyHtml(items = []) {
 function render(w) {
   const n = els.template.content.firstElementChild.cloneNode(true);
   const [label, cls] = status(w);
-  n.querySelector(".status").textContent = label;
-  n.querySelector(".status").className = `status ${cls}`;
-  n.querySelector(".id").textContent = `#${w.id}`;
+  const statusEl = n.querySelector(".status");
+  statusEl.textContent = label;
+  statusEl.className = `status ${cls}`;
+  n.querySelector(".id").textContent = `Watch #${w.id}`;
   n.querySelector("h3").textContent = w.title || "Pending first successful check";
   n.querySelector(".price").textContent = w.price || "Price unavailable";
   n.querySelector(".category").textContent = w.category || "Pokémon";
-  n.querySelector(".meta").textContent = [w.sku && `SKU ${w.sku}`, w.storeName, w.source].filter(Boolean).join(" • ") || "Waiting for product details";
-  n.querySelector(".availability").textContent = cleanAvailability(w.availabilityText, w.status);
-  n.querySelector(".checked").innerHTML = `<span>Last checked</span><strong>${when(w.lastCheckedAt)}</strong>${w.lastError ? `<em>${w.lastError}</em>` : ""}`;
-  n.querySelector(".alerted").innerHTML = `<span>Last alert</span><strong>${when(w.lastAlertAt)}</strong><small>${Number(w.alertCount || 0)} alert${Number(w.alertCount || 0) === 1 ? "" : "s"}</small>`;
+  n.querySelector(".meta").textContent = [w.sku && `SKU: ${w.sku}`, w.storeName, w.source].filter(Boolean).join(" • ") || "Waiting for product details";
+  const availability = n.querySelector(".availability");
+  availability.textContent = cleanAvailability(w.availabilityText, w.status);
+  availability.className = `availability ${cls}`;
+  n.querySelector(".checked").innerHTML = `<span>Last Checked</span><strong>${when(w.lastCheckedAt)}</strong>${w.lastError ? `<em>${w.lastError}</em>` : ""}`;
+  n.querySelector(".alerted").innerHTML = `<span>Last Alert</span><strong>${when(w.lastAlertAt)}</strong><small>${Number(w.alertCount || 0)} alert${Number(w.alertCount || 0) === 1 ? "" : "s"}</small>`;
+  n.querySelector(".alert-count").textContent = Number(w.alertCount || 0);
+  n.querySelector(".monitor-state").textContent = w.enabled ? "Active" : "Paused";
   n.querySelector(".history-list").innerHTML = historyHtml(w.history);
-  const a = n.querySelector("a"); a.href = w.pageUrl || w.url;
+  const a = n.querySelector(".product-link"); a.href = w.pageUrl || w.url;
   if (w.image) {
-    const i = n.querySelector("img"); i.src = w.image; i.alt = w.title || "Product image"; i.style.display = "block";
-    i.onerror = () => { i.style.display = "none"; n.querySelector(".media span").style.display = "block"; };
-    n.querySelector(".media span").style.display = "none";
+    const i = n.querySelector(".product-image");
+    i.src = w.image; i.alt = w.title || "Product image"; i.style.display = "block";
+    n.querySelector(".image-fallback").style.display = "none";
+    i.onerror = () => { i.style.display = "none"; n.querySelector(".image-fallback").style.display = "block"; };
   }
   n.querySelector(".check").onclick = async () => { const r = await api(`/api/watches/${w.id}/check`, { method: "POST", body: "{}" }); toast(r.pendingAgent ? "Queued for the home agent" : "Product checked"); load(); };
   n.querySelector(".toggle").textContent = w.enabled ? "Pause" : "Resume";
@@ -110,7 +116,7 @@ async function pushUi(configured) {
 
 async function load() {
   const d = await api("/api/dashboard"); dashboard = d;
-  els.watching.textContent = d.watches.length;
+  els.watching.textContent = d.watches.length; if (els.watchingTop) els.watchingTop.textContent = d.watches.length;
   els.inStock.textContent = d.watches.filter(w => w.enabled && w.status === "in_stock").length;
   els.outStock.textContent = d.watches.filter(w => w.enabled && w.status === "out_of_stock").length;
   els.devices.textContent = d.subscriptions;

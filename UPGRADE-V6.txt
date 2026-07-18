@@ -1,0 +1,15 @@
+RESTOCK MONITOR V6 — READABILITY REDESIGN
+
+1. Replace the files in your existing GitHub repository with the contents of this ZIP.
+2. Commit/push the changes.
+3. Railway will redeploy automatically.
+4. Your existing Railway variables and persistent volume data remain unchanged.
+
+The product card layout now has:
+- No text over product images
+- White image panel and separate product information panel
+- Larger product titles and prices
+- Clear availability bars
+- Readable last-check, last-alert, alert-count, and monitoring panels
+- Responsive one-column layout on narrower screens
+- Sidebar notification test buttons
