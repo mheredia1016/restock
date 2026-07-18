@@ -1,0 +1,13 @@
+Replace the repository with these files.
+
+Railway:
+- Builder: Dockerfile
+- Dockerfile path: Dockerfile
+- Custom Build Command: blank
+- Custom Start Command: blank
+- Healthcheck Path: /health
+- Volume mount path: /data
+- Do not manually add PORT
+
+This package-lock.json was fixed so it uses registry.npmjs.org instead of a
+private internal registry that Railway cannot access correctly.
