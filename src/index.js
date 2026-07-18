@@ -40,13 +40,11 @@ function dashboardAuth(req, res, next) {
   return res.status(401).send("Authentication required.");
 }
 
-app.get("/health", async (_req, res) => {
-  const db = await readDb();
-  res.json({
+app.get("/health", (_req, res) => {
+  res.status(200).json({
     ok: true,
+    service: "pokemon-restock-dashboard",
     discordReady: client.isReady(),
-    watches: db.watches.length,
-    enabled: db.watches.filter((watch) => watch.enabled).length,
     store: config.storeName
   });
 });
@@ -194,6 +192,10 @@ app.listen(config.port, () => {
 });
 
 async function registerCommands() {
+  if (!config.discordToken || !config.clientId) {
+    console.log("Discord commands skipped: DISCORD_TOKEN or DISCORD_CLIENT_ID is missing.");
+    return;
+  }
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   const route = config.guildId
     ? Routes.applicationGuildCommands(config.clientId, config.guildId)
@@ -355,4 +357,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 process.on("unhandledRejection", (error) => console.error("Unhandled rejection:", error));
 process.on("uncaughtException", (error) => console.error("Uncaught exception:", error));
 
-client.login(config.discordToken);
+if (config.discordToken) {
+  client.login(config.discordToken).catch((error) => {
+    console.error("Discord login failed; web dashboard will remain available:", error.message);
+  });
+} else {
+  console.log("DISCORD_TOKEN is missing; running web dashboard without Discord.");
+  seed().catch((error) => console.error("Seed failed:", error.message));
+  setInterval(() => {
+    checkAll(client).catch((error) => console.error("Scheduled scan failed:", error.message));
+  }, config.intervalSeconds * 1000);
+}
