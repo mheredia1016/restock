@@ -1,6 +1,6 @@
 import { readDb, updateWatch } from "./store.js";
 import { checkMicroCenterProduct } from "./microcenter.js";
-import { sendAlert } from "./alerts.js";
+import { sendAllAlerts } from "./notifyAll.js";
 
 let running = false;
 
@@ -25,7 +25,7 @@ export async function checkOne(client, watch, { manual = false } = {}) {
 
     // Automated alerts only happen after an initial baseline has been stored.
     if (statusChanged || priceChanged) {
-      await sendAlert(client, result, { priceChanged });
+      await sendAllAlerts(client, result, { priceChanged });
     }
 
     console.log(

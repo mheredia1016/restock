@@ -97,3 +97,43 @@ Set `DASHBOARD_PASSWORD` to protect the dashboard with browser Basic Authenticat
 Leave it blank only when you intentionally want a public dashboard.
 
 The `/health` route remains public so Railway health checks continue to work.
+
+
+## Browser push setup
+
+Generate VAPID keys once:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Add the output to Railway:
+
+```text
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com
+```
+
+Open the dashboard on the phone or computer you want to receive alerts on and click **Enable Browser Push**.
+
+For iPhone/iPad, browser push works best when the dashboard is added to the Home Screen and opened from there. Notification support depends on the installed iOS version and browser behavior.
+
+## Email setup
+
+The bot uses standard SMTP through Nodemailer. For Gmail:
+
+```text
+EMAIL_ALERTS_ENABLED=true
+EMAIL_TO=you@example.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=you@gmail.com
+SMTP_PASS=your-google-app-password
+EMAIL_FROM=Pokemon Restock Alerts <you@gmail.com>
+```
+
+Use a Google App Password rather than your normal Gmail password.
+
+The dashboard's **Send Test Alert** button sends Discord, browser push, and email test notifications together.

@@ -20,5 +20,16 @@ export const config = {
   defaultProductUrl:
     process.env.DEFAULT_PRODUCT_URL?.trim() ||
     "https://www.microcenter.com/product/713503/nintendo-pokemon-mega-evolution-pitch-black-elite-trainer-box",
-  port: Number(process.env.PORT || 8080)
+  port: Number(process.env.PORT || 8080),
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY?.trim() || null,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY?.trim() || null,
+  vapidSubject: process.env.VAPID_SUBJECT?.trim() || null,
+  emailAlertsEnabled: (process.env.EMAIL_ALERTS_ENABLED || "false").toLowerCase() === "true",
+  emailTo: process.env.EMAIL_TO?.trim() || null,
+  smtpHost: process.env.SMTP_HOST?.trim() || null,
+  smtpPort: Number(process.env.SMTP_PORT || 587),
+  smtpSecure: (process.env.SMTP_SECURE || "false").toLowerCase() === "true",
+  smtpUser: process.env.SMTP_USER?.trim() || null,
+  smtpPass: process.env.SMTP_PASS || null,
+  emailFrom: process.env.EMAIL_FROM?.trim() || null
 };

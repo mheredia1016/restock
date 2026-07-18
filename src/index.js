@@ -13,7 +13,9 @@ import { commandJson } from "./commands.js";
 import { addWatch, readDb, removeWatch, setEnabled } from "./store.js";
 import { validateMicroCenterUrl, checkMicroCenterProduct } from "./microcenter.js";
 import { checkAll, checkOne } from "./checker.js";
-import { sendAlert } from "./alerts.js";
+import { sendAllAlerts } from "./notifyAll.js";
+import { saveSubscription, removeSubscription, listSubscriptions } from "./notificationStore.js";
+import { pushConfigured } from "./push.js";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const app = express();
@@ -66,7 +68,11 @@ app.get("/api/dashboard", async (_req, res) => {
     storeName: config.storeName,
     intervalSeconds: config.intervalSeconds,
     lastScanAt,
-    watches: db.watches
+    watches: db.watches,
+    notifications: {
+      pushConfigured: pushConfigured(),
+      emailEnabled: config.emailAlertsEnabled
+    }
   });
 });
 
@@ -129,6 +135,54 @@ app.post("/api/check-all", async (_req, res) => {
     successful: results.filter((result) => result.ok).length,
     failed: results.filter((result) => !result.ok).length
   });
+});
+
+
+app.get("/api/push/public-key", (_req, res) => {
+  if (!pushConfigured()) {
+    return res.status(503).json({ error: "Browser push is not configured." });
+  }
+  return res.json({ publicKey: config.vapidPublicKey });
+});
+
+app.post("/api/push/subscribe", async (req, res) => {
+  try {
+    const count = await saveSubscription(req.body);
+    return res.status(201).json({ ok: true, subscriptions: count });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/push/unsubscribe", async (req, res) => {
+  const endpoint = req.body?.endpoint;
+  if (!endpoint) return res.status(400).json({ error: "Missing endpoint." });
+  const removed = await removeSubscription(endpoint);
+  return res.json({ ok: true, removed });
+});
+
+app.post("/api/notifications/test", async (_req, res) => {
+  const db = await readDb();
+  const watch = db.watches[0];
+  let result;
+
+  if (watch) {
+    result = await checkMicroCenterProduct(watch.url, watch.storeName);
+  } else {
+    result = {
+      title: "Test Pokémon Product",
+      url: "https://www.microcenter.com/",
+      storeName: config.storeName,
+      status: "in_stock",
+      price: "$59.99",
+      sku: "TEST",
+      image: null,
+      checkedAt: new Date().toISOString()
+    };
+  }
+
+  const notifications = await sendAllAlerts(client, { ...result, status: "in_stock" }, { test: true });
+  return res.json({ ok: true, notifications });
 });
 
 app.get("*", (_req, res) => {
@@ -289,7 +343,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         };
       }
 
-      await sendAlert(client, { ...result, status: "in_stock" }, { test: true });
+      await sendAllAlerts(client, { ...result, status: "in_stock" }, { test: true });
       await interaction.editReply("Test alert sent.");
     }
   } catch (error) {

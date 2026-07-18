@@ -12,8 +12,94 @@ const els = {
   refresh: document.querySelector("#refreshButton"),
   checkAll: document.querySelector("#checkAllButton"),
   connection: document.querySelector("#connectionBadge"),
-  toast: document.querySelector("#toast")
+  toast: document.querySelector("#toast"),
+  pushButton: document.querySelector("#pushButton"),
+  pushStatus: document.querySelector("#pushStatus"),
+  emailStatus: document.querySelector("#emailStatus"),
+  testNotifications: document.querySelector("#testNotificationsButton")
 };
+
+
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
+
+async function getPushSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const registration = await navigator.serviceWorker.register("/sw.js");
+  return registration.pushManager.getSubscription();
+}
+
+async function updatePushUi(configured) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    els.pushStatus.textContent = "Push unsupported";
+    els.pushButton.disabled = true;
+    return;
+  }
+
+  if (!configured) {
+    els.pushStatus.textContent = "Push not configured";
+    els.pushButton.disabled = true;
+    return;
+  }
+
+  const subscription = await getPushSubscription();
+  const permission = Notification.permission;
+
+  if (subscription) {
+    els.pushStatus.textContent = "Browser push enabled";
+    els.pushStatus.className = "badge good";
+    els.pushButton.textContent = "Disable Browser Push";
+  } else {
+    els.pushStatus.textContent = permission === "denied" ? "Push permission blocked" : "Browser push disabled";
+    els.pushStatus.className = "badge neutral";
+    els.pushButton.textContent = "Enable Browser Push";
+  }
+}
+
+async function togglePush() {
+  els.pushButton.disabled = true;
+  try {
+    const existing = await getPushSubscription();
+
+    if (existing) {
+      await api("/api/push/unsubscribe", {
+        method: "POST",
+        body: JSON.stringify({ endpoint: existing.endpoint })
+      });
+      await existing.unsubscribe();
+      showToast("Browser push disabled.");
+      await updatePushUi(true);
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Notification permission was not granted.");
+
+    const { publicKey } = await api("/api/push/public-key");
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+
+    await api("/api/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(subscription)
+    });
+
+    showToast("Browser push enabled.");
+    await updatePushUi(true);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    els.pushButton.disabled = false;
+  }
+}
 
 function showToast(message) {
   els.toast.textContent = message;
@@ -129,6 +215,9 @@ async function loadDashboard() {
     els.outStock.textContent = watches.filter(w => w.enabled && w.lastStatus === "out_of_stock").length;
     els.storeName.textContent = data.storeName;
     els.lastScan.textContent = data.lastScanAt ? formatDate(data.lastScanAt) : "Never";
+    els.emailStatus.textContent = data.notifications?.emailEnabled ? "Email alerts enabled" : "Email alerts disabled";
+    els.emailStatus.className = `badge ${data.notifications?.emailEnabled ? "good" : "neutral"}`;
+    await updatePushUi(Boolean(data.notifications?.pushConfigured));
 
     els.watchList.innerHTML = "";
     if (!watches.length) {
@@ -181,3 +270,20 @@ els.checkAll.addEventListener("click", async () => {
 
 loadDashboard();
 setInterval(loadDashboard, 30000);
+
+
+els.pushButton.addEventListener("click", togglePush);
+
+els.testNotifications.addEventListener("click", async () => {
+  els.testNotifications.disabled = true;
+  els.testNotifications.textContent = "Sending…";
+  try {
+    await api("/api/notifications/test", { method: "POST", body: "{}" });
+    showToast("Test notifications sent.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    els.testNotifications.disabled = false;
+    els.testNotifications.textContent = "Send Test Alert";
+  }
+});

@@ -370,3 +370,36 @@ input:focus {
   .add-panel form { flex-direction: column; }
   .watch-card { grid-template-rows: 190px 1fr; }
 }
+
+
+.notification-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 22px;
+  align-items: center;
+}
+
+.notification-actions,
+.notification-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.notification-status {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 800px) {
+  .notification-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-status {
+    grid-column: auto;
+  }
+
+  .notification-actions .button {
+    flex: 1;
+  }
+}
