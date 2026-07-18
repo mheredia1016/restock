@@ -1,22 +1,19 @@
 {
-  "name": "pokemon-restock-discord-bot",
-  "version": "1.1.0",
-  "description": "Discord, browser push, and email restock alerts for Micro Center products",
+  "name": "pokemon-restock-dashboard-v2",
+  "version": "2.0.0",
+  "private": true,
   "type": "module",
-  "main": "src/index.js",
+  "description": "Railway-ready Micro Center restock dashboard with browser push, email, and optional Discord alerts",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "start": "node src/index.js",
-    "check": "node src/test-check.js"
-  },
-  "engines": {
-    "node": ">=20"
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/store.js && node --check src/microcenter.js && node --check src/notifiers.js"
   },
   "dependencies": {
-    "cheerio": "^1.0.0",
-    "discord.js": "^14.18.0",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "web-push": "^3.6.7",
-    "nodemailer": "^6.10.0"
+    "cheerio": "1.0.0",
+    "discord.js": "14.16.3",
+    "express": "4.21.2",
+    "nodemailer": "6.10.1",
+    "web-push": "3.6.7"
   }
 }

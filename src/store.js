@@ -3,90 +3,96 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { config } from "./config.js";
 
-const filePath = path.join(config.dataDir, "watches.json");
+const dbFile = path.join(config.dataDir, "restock-db.json");
+let memoryDb = { watches: [], subscriptions: [] };
+let usingMemory = false;
 
-async function ensureFile() {
-  await fs.mkdir(config.dataDir, { recursive: true });
+async function ensureDir() {
   try {
-    await fs.access(filePath);
-  } catch {
-    await fs.writeFile(filePath, JSON.stringify({ watches: [] }, null, 2));
+    await fs.mkdir(config.dataDir, { recursive: true });
+    return true;
+  } catch (error) {
+    usingMemory = true;
+    console.error("Data directory unavailable; using memory storage:", error.message);
+    return false;
   }
 }
 
 export async function readDb() {
-  await ensureFile();
+  if (usingMemory || !(await ensureDir())) return structuredClone(memoryDb);
   try {
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw);
-    return { watches: Array.isArray(parsed.watches) ? parsed.watches : [] };
+    const parsed = JSON.parse(await fs.readFile(dbFile, "utf8"));
+    return {
+      watches: Array.isArray(parsed.watches) ? parsed.watches : [],
+      subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : []
+    };
   } catch (error) {
-    console.error("Could not read database; creating a clean file:", error.message);
-    const db = { watches: [] };
-    await writeDb(db);
-    return db;
+    if (error.code !== "ENOENT") console.error("Database read failed:", error.message);
+    return { watches: [], subscriptions: [] };
   }
 }
 
 export async function writeDb(db) {
-  await fs.mkdir(config.dataDir, { recursive: true });
-  const temp = `${filePath}.tmp`;
+  memoryDb = structuredClone(db);
+  if (usingMemory || !(await ensureDir())) return;
+  const temp = `${dbFile}.tmp`;
   await fs.writeFile(temp, JSON.stringify(db, null, 2));
-  await fs.rename(temp, filePath);
+  await fs.rename(temp, dbFile);
 }
 
-export async function addWatch(url, storeName = config.storeName) {
+export async function addWatch(url) {
   const db = await readDb();
-  const normalized = new URL(url).toString();
-  const duplicate = db.watches.find(
-    (watch) => watch.url === normalized && watch.storeName.toLowerCase() === storeName.toLowerCase()
-  );
-  if (duplicate) return { watch: duplicate, created: false };
-
+  const existing = db.watches.find(w => w.url === url);
+  if (existing) return { watch: existing, created: false };
   const watch = {
     id: crypto.randomBytes(3).toString("hex"),
-    url: normalized,
-    storeName,
+    url,
+    storeName: config.storeName,
     enabled: true,
-    title: null,
+    title: "Pending first check",
+    status: "unknown",
+    price: null,
     sku: null,
     image: null,
-    lastStatus: null,
-    lastPrice: null,
+    createdAt: new Date().toISOString(),
     lastCheckedAt: null,
     lastChangedAt: null,
-    consecutiveErrors: 0,
-    createdAt: new Date().toISOString()
+    lastError: null
   };
-
   db.watches.push(watch);
   await writeDb(db);
   return { watch, created: true };
 }
 
-export async function removeWatch(id) {
+export async function updateWatch(id, patch) {
   const db = await readDb();
-  const index = db.watches.findIndex((watch) => watch.id === id);
-  if (index === -1) return null;
+  const watch = db.watches.find(w => w.id === id);
+  if (!watch) return null;
+  Object.assign(watch, patch);
+  await writeDb(db);
+  return watch;
+}
+
+export async function deleteWatch(id) {
+  const db = await readDb();
+  const index = db.watches.findIndex(w => w.id === id);
+  if (index < 0) return null;
   const [removed] = db.watches.splice(index, 1);
   await writeDb(db);
   return removed;
 }
 
-export async function setEnabled(id, enabled) {
+export async function saveSubscription(subscription) {
   const db = await readDb();
-  const watch = db.watches.find((item) => item.id === id);
-  if (!watch) return null;
-  watch.enabled = enabled;
+  const existing = db.subscriptions.find(s => s.endpoint === subscription.endpoint);
+  if (existing) Object.assign(existing, subscription, { updatedAt: new Date().toISOString() });
+  else db.subscriptions.push({ ...subscription, createdAt: new Date().toISOString() });
   await writeDb(db);
-  return watch;
+  return db.subscriptions.length;
 }
 
-export async function updateWatch(id, patch) {
+export async function removeSubscription(endpoint) {
   const db = await readDb();
-  const watch = db.watches.find((item) => item.id === id);
-  if (!watch) return null;
-  Object.assign(watch, patch);
+  db.subscriptions = db.subscriptions.filter(s => s.endpoint !== endpoint);
   await writeDb(db);
-  return watch;
 }
