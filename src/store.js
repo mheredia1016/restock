@@ -62,7 +62,11 @@ export async function addWatch(url) {
     createdAt: new Date().toISOString(),
     lastCheckedAt: null,
     lastChangedAt: null,
-    lastError: null
+    lastError: null,
+    category: "Pokémon",
+    lastAlertAt: null,
+    alertCount: 0,
+    history: []
   };
   db.watches.push(watch);
   await writeDb(db);

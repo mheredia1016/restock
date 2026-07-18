@@ -39,8 +39,11 @@ async function applyAgentResult(watch, payload) {
   const status = ["in_stock", "out_of_stock", "unknown"].includes(payload.status)
     ? payload.status
     : "unknown";
+  const previousStatus = watch.status;
+  const previousPrice = watch.price;
   const changed = watch.status !== "unknown" && status !== watch.status;
   const becameAvailable = status === "in_stock" && watch.status !== "in_stock";
+  const priceChanged = Boolean(previousPrice && payload.price && previousPrice !== payload.price);
 
   const result = {
     title: payload.title || watch.title || "Micro Center Product",
@@ -57,7 +60,10 @@ async function applyAgentResult(watch, payload) {
     checkedAt
   };
 
-  await updateWatch(watch.id, {
+  const history = Array.isArray(watch.history) ? watch.history.slice(-49) : [];
+  if (changed || priceChanged || !history.length) history.push({ status: result.status, price: result.price, at: checkedAt });
+
+  const patch = {
     title: result.title,
     status: result.status,
     price: result.price,
@@ -71,11 +77,18 @@ async function applyAgentResult(watch, payload) {
     lastSuccessfulAt: (result.title && result.price && result.status !== "unknown") ? checkedAt : watch.lastSuccessfulAt,
     lastChangedAt: changed ? checkedAt : watch.lastChangedAt,
     lastError: null,
-    lastAgentAt: checkedAt
-  });
+    lastAgentAt: checkedAt,
+    history
+  };
 
-  if (becameAvailable) await notify(result);
-  return { ok: true, result, changed, becameAvailable };
+  if (changed || priceChanged) {
+    const notifications = await notify({ ...result, category: watch.category || "Pokémon" }, { previousStatus, previousPrice });
+    patch.lastAlertAt = checkedAt;
+    patch.alertCount = Number(watch.alertCount || 0) + 1;
+    patch.lastNotifications = notifications;
+  }
+  await updateWatch(watch.id, patch);
+  return { ok: true, result, changed, becameAvailable, priceChanged };
 }
 
 app.get("/api/agent/jobs", requireAgent, async (_req, res) => {
@@ -111,6 +124,18 @@ app.post("/api/agent/results", requireAgent, async (req, res) => {
   }
 
   res.json({ applied });
+});
+
+app.post("/api/agent/watches", requireAgent, async (req, res) => {
+  try {
+    const url = validateProductUrl(req.body?.url || "");
+    const added = await addWatch(url);
+    const patch = {};
+    if (req.body?.title) patch.title = String(req.body.title).slice(0, 250);
+    if (req.body?.category) patch.category = String(req.body.category).slice(0, 50);
+    const watch = Object.keys(patch).length ? await updateWatch(added.watch.id, patch) : added.watch;
+    res.status(added.created ? 201 : 200).json({ created: added.created, watch });
+  } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
 function auth(req, res, next) {
@@ -190,8 +215,11 @@ app.post("/api/watches", async (req, res) => {
 });
 
 app.patch("/api/watches/:id", async (req, res) => {
-  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "enabled must be true or false" });
-  const watch = await updateWatch(req.params.id, { enabled: req.body.enabled });
+  const patch = {};
+  if (typeof req.body?.enabled === "boolean") patch.enabled = req.body.enabled;
+  if (typeof req.body?.category === "string") patch.category = req.body.category.slice(0, 50);
+  if (!Object.keys(patch).length) return res.status(400).json({ error: "No valid fields supplied" });
+  const watch = await updateWatch(req.params.id, patch);
   if (!watch) return res.status(404).json({ error: "Watch not found" });
   res.json({ watch });
 });
@@ -237,23 +265,29 @@ app.post("/api/push/unsubscribe", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/notifications/test", async (_req, res) => {
-  const db = await readDb();
-  const watch = db.watches[0];
-  const result = watch ? {
-    title: watch.title || "Test Pokémon Product",
-    url: watch.url,
-    storeName: watch.storeName || config.storeName,
-    status: "in_stock",
-    price: watch.price || "$59.99",
-    sku: watch.sku || "TEST",
-    image: watch.image || null,
-    checkedAt: new Date().toISOString()
+function testResultFromWatch(watch) {
+  return watch ? {
+    title: watch.title || "Test Pokémon Product", url: watch.url, storeName: watch.storeName || config.storeName,
+    status: "in_stock", price: watch.price || "$59.99", sku: watch.sku || "TEST", image: watch.image || null,
+    category: watch.category || "Pokémon", checkedAt: new Date().toISOString()
   } : {
     title: "Test Pokémon Product", url: "https://www.microcenter.com/", storeName: config.storeName,
-    status: "in_stock", price: "$59.99", sku: "TEST", image: null, checkedAt: new Date().toISOString()
+    status: "in_stock", price: "$59.99", sku: "TEST", image: null, category: "Pokémon", checkedAt: new Date().toISOString()
   };
-  res.json({ notifications: await notify(result, { test: true }) });
+}
+
+app.post("/api/notifications/test/:channel", async (req, res) => {
+  const channel = req.params.channel;
+  if (!["discord", "email", "push", "all"].includes(channel)) return res.status(400).json({ error: "Invalid notification channel" });
+  const db = await readDb();
+  const result = testResultFromWatch(db.watches[0]);
+  const notifications = await notify(result, { test: true, only: channel === "all" ? null : channel });
+  res.json({ notifications });
+});
+
+app.post("/api/notifications/test", async (_req, res) => {
+  const db = await readDb();
+  res.json({ notifications: await notify(testResultFromWatch(db.watches[0]), { test: true }) });
 });
 
 app.get("*", (_req, res) => res.sendFile(path.join(root, "public", "index.html")));

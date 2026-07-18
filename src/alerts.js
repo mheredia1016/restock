@@ -1,10 +1,10 @@
-import { EmbedBuilder } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { config } from "./config.js";
 
 function colorFor(status) {
-  if (status === "in_stock") return 0x2ecc71;
-  if (status === "out_of_stock") return 0xe74c3c;
-  return 0xf1c40f;
+  if (status === "in_stock") return 0x22c55e;
+  if (status === "out_of_stock") return 0xef4444;
+  return 0xf59e0b;
 }
 
 function labelFor(status) {
@@ -13,47 +13,54 @@ function labelFor(status) {
   return "STATUS UNKNOWN";
 }
 
+function categoryFor(result) {
+  return result.category || "Pokémon";
+}
+
 export function buildStatusEmbed(result, options = {}) {
-  const { test = false, priceChanged = false } = options;
+  const { test = false, previousStatus = null, previousPrice = null } = options;
+  const statusChanged = previousStatus && previousStatus !== result.status;
+  const priceChanged = previousPrice && result.price && previousPrice !== result.price;
   const heading = test
     ? "🧪 TEST ALERT"
     : result.status === "in_stock"
-      ? "🚨 POKÉMON RESTOCK"
+      ? "🟢 BACK IN STOCK"
       : result.status === "out_of_stock"
-        ? "❌ STOCK UPDATE"
-        : "⚠️ CHECK NEEDED";
+        ? "🔴 OUT OF STOCK"
+        : "🟡 STOCK CHECK NEEDED";
 
   const embed = new EmbedBuilder()
     .setColor(colorFor(result.status))
     .setTitle(heading)
-    .setDescription(`**${result.title}**`)
+    .setDescription(`**${result.title || "Micro Center Product"}**`)
     .addFields(
-      { name: "Store", value: result.storeName, inline: true },
       { name: "Status", value: `**${labelFor(result.status)}**`, inline: true },
-      { name: "Price", value: result.price || "Not shown", inline: true }
+      { name: "Price", value: result.price || "Not shown", inline: true },
+      { name: "Store", value: result.storeName || config.storeName, inline: true },
+      { name: "Category", value: categoryFor(result), inline: true },
+      { name: "SKU", value: result.sku || "Not shown", inline: true },
+      { name: "Detected", value: `<t:${Math.floor(new Date(result.checkedAt || Date.now()).getTime() / 1000)}:R>`, inline: true }
     )
     .setURL(result.url)
     .setTimestamp(new Date(result.checkedAt || Date.now()))
-    .setFooter({ text: result.sku ? `Micro Center SKU ${result.sku}` : "Micro Center watcher" });
+    .setFooter({ text: test ? "Notification test" : "Micro Center Restock Monitor" });
 
   if (result.image) embed.setThumbnail(result.image);
-  if (priceChanged) embed.addFields({ name: "Price change", value: "The listed price changed." });
+  if (statusChanged) embed.addFields({ name: "Status Change", value: `${labelFor(previousStatus)} → ${labelFor(result.status)}` });
+  if (priceChanged) embed.addFields({ name: "Price Change", value: `${previousPrice} → **${result.price}**` });
 
   return embed;
 }
 
-export async function sendAlert(client, result, options = {}) {
-  const channel = await client.channels.fetch(config.channelId);
-  if (!channel?.isTextBased()) {
-    throw new Error("DISCORD_CHANNEL_ID is not a text channel the bot can access.");
+export function buildButtons(result) {
+  const row = new ActionRowBuilder();
+  row.addComponents(
+    new ButtonBuilder().setLabel("View at Micro Center").setStyle(ButtonStyle.Link).setURL(result.url)
+  );
+  if (config.dashboardUrl) {
+    row.addComponents(
+      new ButtonBuilder().setLabel("Open Dashboard").setStyle(ButtonStyle.Link).setURL(config.dashboardUrl)
+    );
   }
-
-  const mention =
-    result.status === "in_stock" && config.roleId ? `<@&${config.roleId}>` : undefined;
-
-  await channel.send({
-    content: mention,
-    embeds: [buildStatusEmbed(result, options)],
-    allowedMentions: { roles: config.roleId ? [config.roleId] : [] }
-  });
+  return row;
 }

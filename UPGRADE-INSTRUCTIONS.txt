@@ -17,3 +17,19 @@ The dashboard now stores and displays:
 - extraction source
 - last complete result
 - home agent online/offline status
+
+V5 DASHBOARD UPGRADE
+- Replaces the product cards with high-contrast image and information sections.
+- Adds search, stock status filters, category filters, and sorting.
+- Adds product history, last alert time, and alert count.
+- Adds separate Test Discord, Test Email, and Test Browser Push buttons.
+- Discord messages now use rich embeds with product image, store, price, SKU, timestamps, and buttons.
+- Alerts are sent when status or price changes, instead of repeating every check.
+- Adds POST /api/agent/watches for extension-to-dashboard product creation using x-agent-key.
+
+OPTIONAL NEW RAILWAY VARIABLES
+DASHBOARD_URL=https://your-app.up.railway.app
+DISCORD_ROLE_ID=optional_role_id_for_in_stock_mentions
+
+EMAIL VARIABLE NOTE
+Either EMAIL_ALERTS_ENABLED=true or EMAIL_ENABLED=true is accepted.
