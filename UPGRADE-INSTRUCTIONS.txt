@@ -1,0 +1,19 @@
+POKEMON RESTOCK V4
+
+Replace your Railway repository with this package and redeploy.
+
+Keep:
+CHECKER_MODE=agent
+AGENT_API_KEY=<same secret used by the Mac agent>
+AGENT_STALE_MINUTES=10
+DATA_DIR=/data
+
+The dashboard now stores and displays:
+- product title
+- image
+- price
+- SKU
+- stock evidence
+- extraction source
+- last complete result
+- home agent online/offline status

@@ -50,6 +50,10 @@ async function applyAgentResult(watch, payload) {
     price: payload.price || null,
     sku: payload.sku || null,
     image: payload.image || null,
+    availabilityText: payload.availabilityText || null,
+    source: payload.source || "home agent",
+    pageUrl: payload.pageUrl || watch.url,
+    httpStatus: payload.httpStatus || null,
     checkedAt
   };
 
@@ -59,7 +63,12 @@ async function applyAgentResult(watch, payload) {
     price: result.price,
     sku: result.sku,
     image: result.image,
+    availabilityText: result.availabilityText,
+    source: result.source,
+    pageUrl: result.pageUrl,
+    httpStatus: result.httpStatus,
     lastCheckedAt: checkedAt,
+    lastSuccessfulAt: (result.title && result.price && result.status !== "unknown") ? checkedAt : watch.lastSuccessfulAt,
     lastChangedAt: changed ? checkedAt : watch.lastChangedAt,
     lastError: null,
     lastAgentAt: checkedAt
