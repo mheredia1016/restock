@@ -2,12 +2,13 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-ENV NODE_ENV=production
-
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+
+RUN npm ci
 
 COPY . .
+
+ENV NODE_ENV=production
 
 EXPOSE 8080
 
