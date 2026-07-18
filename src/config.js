@@ -18,5 +18,8 @@ export const config = {
   smtpSecure: (process.env.SMTP_SECURE || "false").toLowerCase() === "true",
   smtpUser: process.env.SMTP_USER || "",
   smtpPass: process.env.SMTP_PASS || "",
-  emailFrom: process.env.EMAIL_FROM || ""
+  emailFrom: process.env.EMAIL_FROM || "",
+  checkerMode: (process.env.CHECKER_MODE || "cloud").toLowerCase(),
+  agentApiKey: process.env.AGENT_API_KEY || "",
+  agentStaleMinutes: Math.max(2, Number(process.env.AGENT_STALE_MINUTES || 10))
 };

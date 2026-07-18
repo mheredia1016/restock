@@ -1,10 +1,12 @@
 {
-  "name": "pokemon-restock-dashboard-v2",
-  "version": "2.0.0",
+  "name": "pokemon-restock-dashboard-v3-agent",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Railway-ready Micro Center restock dashboard with browser push, email, and optional Discord alerts",
-  "engines": { "node": ">=20" },
+  "description": "Railway dashboard with a residential home-browser checker agent",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "check": "node --check src/server.js && node --check src/store.js && node --check src/microcenter.js && node --check src/notifiers.js"
