@@ -45,6 +45,14 @@ function historyHtml(items = []) {
   }).join("");
 }
 
+function checkStateLabel(w) {
+  const state = w.checkState?.status;
+  if (state === "queued") return ["Queued…", "queued"];
+  if (state === "checking") return ["Checking…", "checking"];
+  if (state === "failed") return ["Check Failed", "failed"];
+  return ["Check Now", ""];
+}
+
 function render(w) {
   const n = els.template.content.firstElementChild.cloneNode(true);
   const [label, cls] = status(w);
@@ -71,7 +79,18 @@ function render(w) {
     n.querySelector(".image-fallback").style.display = "none";
     i.onerror = () => { i.style.display = "none"; n.querySelector(".image-fallback").style.display = "block"; };
   }
-  n.querySelector(".check").onclick = async () => { const r = await api(`/api/watches/${w.id}/check`, { method: "POST", body: "{}" }); toast(r.pendingAgent ? "Queued for the home agent" : "Product checked"); load(); };
+  const checkButton = n.querySelector(".check");
+  const [checkText, checkClass] = checkStateLabel(w);
+  checkButton.textContent = checkText;
+  checkButton.classList.toggle("queued", checkClass === "queued");
+  checkButton.classList.toggle("checking", checkClass === "checking");
+  checkButton.classList.toggle("failed", checkClass === "failed");
+  checkButton.disabled = checkClass === "queued" || checkClass === "checking";
+  checkButton.onclick = async () => {
+    checkButton.disabled = true; checkButton.textContent = "Queuing…";
+    try { const r = await api(`/api/watches/${w.id}/check`, { method: "POST", body: "{}" }); toast(r.pendingAgent ? "Check queued. Chrome will pick it up within about 30 seconds." : "Product checked"); await load(); }
+    catch (error) { toast(error.message); checkButton.disabled = false; checkButton.textContent = "Check Now"; }
+  };
   n.querySelector(".toggle").textContent = w.enabled ? "Pause" : "Resume";
   n.querySelector(".toggle").onclick = async () => { await api(`/api/watches/${w.id}`, { method: "PATCH", body: JSON.stringify({ enabled: !w.enabled }) }); load(); };
   n.querySelector(".remove").onclick = async () => { if (confirm("Remove this watch?")) { await api(`/api/watches/${w.id}`, { method: "DELETE" }); load(); } };
@@ -103,10 +122,14 @@ function renderGrid() {
   rows.forEach(w => els.grid.appendChild(render(w)));
 }
 
+async function getRegistration() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("This browser does not support web push.");
+  await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+  return navigator.serviceWorker.ready;
+}
 async function getSub() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
-  const r = await navigator.serviceWorker.register("/sw.js");
-  return r.pushManager.getSubscription();
+  try { const r = await getRegistration(); return r.pushManager.getSubscription(); }
+  catch { return null; }
 }
 function key(s) { const p = "=".repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...b].map(c => c.charCodeAt(0))); }
 async function pushUi(configured) {
@@ -120,7 +143,7 @@ async function load() {
   els.inStock.textContent = d.watches.filter(w => w.enabled && w.status === "in_stock").length;
   els.outStock.textContent = d.watches.filter(w => w.enabled && w.status === "out_of_stock").length;
   els.devices.textContent = d.subscriptions;
-  els.agentStatus.textContent = d.agent?.online ? "Online" : "Offline";
+  els.agentStatus.textContent = d.agent?.online ? `Online${d.agent?.count ? ` (${d.agent.count})` : ""}` : "Offline";
   els.agentStatus.className = d.agent?.online ? "online" : "offline";
   els.store.textContent = d.storeName;
   els.badges.innerHTML = badge(`Agent ${d.agent?.online ? "Online" : "Offline"}`, d.agent?.online) + badge(`Push ${d.services.pushConfigured ? "Ready" : "Off"}`, d.services.pushConfigured) + badge(`Email ${d.services.emailConfigured ? "Ready" : "Off"}`, d.services.emailConfigured) + badge(`Discord ${d.services.discordConnected ? "Connected" : "Off"}`, d.services.discordConnected);
@@ -134,11 +157,41 @@ async function load() {
 
 els.form.onsubmit = async e => { e.preventDefault(); els.message.textContent = "Adding…"; try { await api("/api/watches", { method: "POST", body: JSON.stringify({ url: els.url.value }) }); els.url.value = ""; els.message.textContent = "Added. The home agent will check it shortly."; load(); } catch (err) { els.message.textContent = err.message; } };
 els.refresh.onclick = load;
-els.checkAll.onclick = async () => { els.checkAll.disabled = true; try { const r = await api("/api/check-all", { method: "POST", body: "{}" }); toast(r.pendingAgent ? "Home agent will check shortly" : "All products checked"); load(); } finally { els.checkAll.disabled = false; } };
-async function testChannel(channel, label) { const r = await api(`/api/notifications/test/${channel}`, { method: "POST", body: "{}" }); const result = r.notifications?.[channel]; toast(result === "sent" || typeof result === "number" ? `${label} test sent` : `${label}: ${result || "test completed"}`); }
+els.checkAll.onclick = async () => { els.checkAll.disabled = true; try { const r = await api("/api/check-all", { method: "POST", body: "{}" }); toast(r.pendingAgent ? `${r.queued || 0} product checks queued` : "All products checked"); load(); } finally { els.checkAll.disabled = false; } };
+async function testChannel(channel, label) {
+  try {
+    const r = await api(`/api/notifications/test/${channel}`, { method: "POST", body: "{}" });
+    const result = r.notifications?.[channel];
+    if (channel === "push") {
+      if (result && typeof result === "object" && result.sent > 0) return toast(`${label} test sent to ${result.sent} device${result.sent === 1 ? "" : "s"}`);
+      return toast(`${label}: ${typeof result === "string" ? result : "No subscribed device received it"}`);
+    }
+    toast(result === "sent" ? `${label} test sent` : `${label}: ${result || "test completed"}`);
+  } catch (error) { toast(`${label}: ${error.message}`); }
+}
 els.testDiscord.onclick = () => testChannel("discord", "Discord");
 els.testEmail.onclick = () => testChannel("email", "Email");
 els.testPush.onclick = () => testChannel("push", "Browser push");
-els.push.onclick = async () => { const current = await getSub(); if (current) { await api("/api/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint: current.endpoint }) }); await current.unsubscribe(); toast("Push disabled"); return load(); } if (await Notification.requestPermission() !== "granted") return toast("Permission not granted"); const { publicKey } = await api("/api/push/public-key"), reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(publicKey) }); await api("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) }); toast("Push enabled"); load(); };
+els.push.onclick = async () => {
+  try {
+    const current = await getSub();
+    if (current) {
+      await api("/api/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint: current.endpoint }) });
+      await current.unsubscribe();
+      toast("Browser push disabled on this device");
+      return load();
+    }
+    if (!("Notification" in window)) throw new Error("Notifications are not supported by this browser.");
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error(`Notification permission is ${permission}. Allow notifications in the browser site settings.`);
+    const { publicKey } = await api("/api/push/public-key");
+    const reg = await getRegistration();
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(publicKey) });
+    await api("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) });
+    await reg.showNotification("Browser Push Enabled", { body: "This device is now subscribed to restock alerts.", icon: "/icon-192.png", tag: "push-enabled" });
+    toast("Browser push enabled and test notification displayed");
+    load();
+  } catch (error) { toast(`Push setup failed: ${error.message}`); }
+};
 [els.search, els.statusFilter, els.categoryFilter, els.sort].forEach(el => el.addEventListener(el.tagName === "INPUT" ? "input" : "change", renderGrid));
-load(); setInterval(load, 30000);
+load(); setInterval(load, 5000);

@@ -58,25 +58,46 @@ async function sendDiscord(result, options) {
 }
 
 async function sendPush(result, options) {
-  if (!pushReady) throw new Error("Browser push is not configured.");
+  if (!pushReady) throw new Error("Browser push is not configured. Check the VAPID variables in Railway.");
   const db = await readDb();
+  if (!db.subscriptions.length) {
+    throw new Error("No browser is subscribed. Click Enable Browser Push on the device that should receive alerts.");
+  }
+
   let sent = 0;
+  let removed = 0;
+  const failures = [];
   for (const sub of db.subscriptions) {
     try {
       await webpush.sendNotification(sub, JSON.stringify({
         title: options.test ? "🧪 Test Restock Alert" : result.status === "in_stock" ? "🟢 Back In Stock" : "Stock Status Changed",
         body: `${result.title}\n${result.storeName}${result.price ? ` • ${result.price}` : ""}`,
         url: result.url,
-        image: result.image,
+        image: result.image || null,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
         tag: `restock-${result.sku || result.url}`,
         status: result.status
-      }));
+      }), {
+        TTL: 300,
+        urgency: result.status === "in_stock" ? "high" : "normal"
+      });
       sent++;
     } catch (error) {
-      if (error.statusCode === 404 || error.statusCode === 410) await removeSubscription(sub.endpoint);
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await removeSubscription(sub.endpoint);
+        removed++;
+      } else {
+        failures.push(error.body || error.message || `HTTP ${error.statusCode || "error"}`);
+      }
     }
   }
-  return sent;
+
+  if (!sent) {
+    const detail = failures[0] || (removed ? "The saved subscription expired and was removed." : "Unknown push delivery error.");
+    throw new Error(`Browser push sent to 0 devices. ${detail}`);
+  }
+  return { sent, removed, failed: failures.length };
 }
 
 async function sendEmail(result, options) {

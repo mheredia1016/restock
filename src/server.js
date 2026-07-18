@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
-import { addWatch, deleteWatch, readDb, saveSubscription, removeSubscription, updateWatch } from "./store.js";
+import { addWatch, deleteWatch, readDb, saveSubscription, removeSubscription, updateWatch, queueWatchJobs, claimJobs, completeJob, heartbeatAgent } from "./store.js";
 import { checkProduct, validateProductUrl } from "./microcenter.js";
 import { notify, serviceStatus, startOptionalServices } from "./notifiers.js";
 
@@ -91,18 +91,18 @@ async function applyAgentResult(watch, payload) {
   return { ok: true, result, changed, becameAvailable, priceChanged };
 }
 
-app.get("/api/agent/jobs", requireAgent, async (_req, res) => {
+app.get("/api/agent/jobs", requireAgent, async (req, res) => {
+  const agentId = String(req.get("x-agent-id") || req.query.agentId || "anonymous-agent").slice(0, 100);
+  await heartbeatAgent(agentId, { name: req.get("x-agent-name") || "Chrome Extension", version: req.get("x-agent-version") || "unknown", userAgent: req.get("user-agent") || "" });
+  const claimed = await claimJobs(agentId, 10);
   const db = await readDb();
-  res.json({
-    storeName: config.storeName,
-    intervalSeconds: config.intervalSeconds,
-    watches: db.watches.filter(w => w.enabled).map(w => ({
-      id: w.id,
-      url: w.url,
-      storeName: w.storeName || config.storeName,
-      title: w.title
-    }))
-  });
+  res.json({ storeName: config.storeName, intervalSeconds: config.intervalSeconds, jobs: claimed, watches: db.watches.filter(w => w.enabled).map(w => ({ id: w.id, url: w.url, storeName: w.storeName || config.storeName, title: w.title })) });
+});
+
+app.post("/api/agent/heartbeat", requireAgent, async (req, res) => {
+  const agentId = String(req.get("x-agent-id") || req.body?.agentId || "anonymous-agent").slice(0, 100);
+  const agent = await heartbeatAgent(agentId, req.body || {});
+  res.json({ ok: true, agent });
 });
 
 app.post("/api/agent/results", requireAgent, async (req, res) => {
@@ -117,9 +117,12 @@ app.post("/api/agent/results", requireAgent, async (req, res) => {
       continue;
     }
     try {
-      applied.push({ watchId: watch.id, ...(await applyAgentResult(watch, payload)) });
+      const outcome = await applyAgentResult(watch, payload);
+      await completeJob(payload?.jobId, { error: outcome.ok ? null : outcome.error });
+      applied.push({ watchId: watch.id, jobId: payload?.jobId || null, ...outcome });
     } catch (error) {
-      applied.push({ watchId: watch.id, ok: false, error: error.message });
+      await completeJob(payload?.jobId, { error: error.message });
+      applied.push({ watchId: watch.id, jobId: payload?.jobId || null, ok: false, error: error.message });
     }
   }
 
@@ -187,16 +190,16 @@ async function runAll() {
 
 app.get("/api/dashboard", async (_req, res) => {
   const db = await readDb();
-  const latestAgentAt = db.watches.map(w => w.lastAgentAt).filter(Boolean).sort().at(-1) || null;
-  const agentOnline = latestAgentAt
-    ? Date.now() - new Date(latestAgentAt).getTime() < config.agentStaleMinutes * 60_000
-    : false;
+  const onlineAgents = (db.agents || []).filter(a => Date.now() - new Date(a.lastSeenAt || 0).getTime() < config.agentStaleMinutes * 60_000);
+  const latestAgentAt = (db.agents || []).map(a => a.lastSeenAt).filter(Boolean).sort().at(-1) || db.watches.map(w => w.lastAgentAt).filter(Boolean).sort().at(-1) || null;
+  const agentOnline = onlineAgents.length > 0 || (latestAgentAt ? Date.now() - new Date(latestAgentAt).getTime() < config.agentStaleMinutes * 60_000 : false);
 
   res.json({
     storeName: config.storeName,
     intervalSeconds: config.intervalSeconds,
     checkerMode: config.checkerMode,
-    agent: { configured: Boolean(config.agentApiKey), online: agentOnline, lastSeenAt: latestAgentAt },
+    agent: { configured: Boolean(config.agentApiKey), online: agentOnline, lastSeenAt: latestAgentAt, count: onlineAgents.length, agents: onlineAgents },
+    jobs: { queued: db.jobs.filter(j => j.status === "queued").length, checking: db.jobs.filter(j => j.status === "claimed").length },
     watches: db.watches,
     subscriptions: db.subscriptions.length,
     services: serviceStatus()
@@ -235,7 +238,8 @@ app.post("/api/watches/:id/check", async (req, res) => {
   const watch = db.watches.find(w => w.id === req.params.id);
   if (!watch) return res.status(404).json({ error: "Watch not found" });
   if (config.checkerMode === "agent") {
-    return res.status(202).json({ ok: false, pendingAgent: true, error: "The home agent will perform the next check." });
+    const [job] = await queueWatchJobs([watch.id], "dashboard");
+    return res.status(202).json({ ok: true, pendingAgent: true, queued: Boolean(job), job });
   }
   const result = await runCheck(watch);
   res.status(result.ok ? 200 : 502).json(result);
@@ -243,7 +247,9 @@ app.post("/api/watches/:id/check", async (req, res) => {
 
 app.post("/api/check-all", async (_req, res) => {
   if (config.checkerMode === "agent") {
-    return res.status(202).json({ checked: 0, pendingAgent: true, message: "The home agent will perform the next check." });
+    const db = await readDb();
+    const jobs = await queueWatchJobs(db.watches.filter(w => w.enabled).map(w => w.id), "dashboard-all");
+    return res.status(202).json({ checked: 0, pendingAgent: true, queued: jobs.length, jobs });
   }
   const results = await runAll();
   res.json({ checked: results.length, successful: results.filter(r => r.ok).length, results });

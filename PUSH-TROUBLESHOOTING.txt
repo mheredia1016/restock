@@ -1,0 +1,19 @@
+BROWSER PUSH V8
+
+1. Deploy this dashboard version.
+2. Open the dashboard in Chrome on the device that should receive alerts.
+3. Click Enable Browser Push.
+4. Chrome must show a local notification saying Browser Push Enabled.
+5. Click Test Browser Push. The dashboard now reports the exact number of devices reached or the real error.
+
+Required Railway variables:
+VAPID_PUBLIC_KEY
+VAPID_PRIVATE_KEY
+VAPID_SUBJECT=mailto:your-email@example.com
+
+Important:
+- VAPID_SUBJECT must be a mailto: address or https URL.
+- Keep DATA_DIR=/data and a Railway volume mounted at /data, or subscriptions disappear after redeploys.
+- Chrome site notifications must be Allow.
+- macOS System Settings > Notifications > Google Chrome must be enabled.
+- Browser push subscriptions are per browser/device. Enable it separately on each device.
