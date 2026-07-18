@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pokémon Restock Dashboard</title>
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">MICRO CENTER WATCHER</p>
+        <h1>Pokémon Restock Dashboard</h1>
+        <p class="subtext">Chicago inventory monitoring with Discord alerts.</p>
+      </div>
+      <div class="top-actions">
+        <span id="connectionBadge" class="badge neutral">Connecting</span>
+        <button id="refreshButton" class="button secondary">Refresh</button>
+        <button id="checkAllButton" class="button primary">Check All Now</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="stats-grid">
+        <article class="stat-card">
+          <span>Total Watches</span>
+          <strong id="totalWatches">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>In Stock</span>
+          <strong id="inStockCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Out of Stock</span>
+          <strong id="outStockCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Last Scan</span>
+          <strong id="lastScan">Never</strong>
+        </article>
+      </section>
+
+      <section class="panel add-panel">
+        <div>
+          <p class="eyebrow">ADD PRODUCT</p>
+          <h2>Watch another Micro Center product</h2>
+        </div>
+        <form id="addWatchForm">
+          <input
+            id="productUrl"
+            type="url"
+            placeholder="https://www.microcenter.com/product/..."
+            required
+          />
+          <button class="button primary" type="submit">Add Watch</button>
+        </form>
+        <p id="formMessage" class="form-message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ACTIVE MONITORING</p>
+            <h2>Watched Products</h2>
+          </div>
+          <span id="storeName" class="store-chip">IL - Chicago</span>
+        </div>
+
+        <div id="watchList" class="watch-grid">
+          <div class="empty-state">Loading products…</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="watchCardTemplate">
+    <article class="watch-card">
+      <div class="product-media">
+        <img class="product-image" alt="" />
+        <div class="product-placeholder">PKMN</div>
+      </div>
+      <div class="watch-content">
+        <div class="watch-topline">
+          <span class="status-pill neutral">Unknown</span>
+          <span class="watch-id"></span>
+        </div>
+        <h3 class="product-title"></h3>
+        <div class="product-meta">
+          <span class="price"></span>
+          <span class="sku"></span>
+        </div>
+        <p class="checked-time"></p>
+        <a class="product-link" target="_blank" rel="noopener noreferrer">Open Product</a>
+
+        <div class="watch-actions">
+          <button class="button small secondary check-button">Check Now</button>
+          <button class="button small secondary toggle-button">Pause</button>
+          <button class="button small danger remove-button">Remove</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

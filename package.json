@@ -1,0 +1,20 @@
+{
+  "name": "pokemon-restock-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord restock alerts for Micro Center products",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node src/test-check.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
