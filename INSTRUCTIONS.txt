@@ -1,0 +1,20 @@
+POKEMON RESTOCK DASHBOARD — DOCKER FILES
+
+Copy these three files into the ROOT of your GitHub repository:
+
+- Dockerfile
+- .dockerignore
+- railway.json
+
+They must be beside package.json and package-lock.json.
+
+Then in Railway:
+1. Open Service > Settings > Build.
+2. Select Dockerfile as the Builder.
+3. Remove any Custom Build Command.
+4. Under Deploy, the start command may be left blank because Dockerfile supplies it.
+   If Railway still shows a custom start command, npm start is also fine.
+5. Redeploy the latest commit.
+
+Do not manually create a PORT variable.
+Keep the /data volume mounted at /data.
