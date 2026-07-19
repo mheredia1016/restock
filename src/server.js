@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
-import { addWatch, deleteWatch, readDb, saveSubscription, removeSubscription, updateWatch, queueWatchJobs, claimJobs, completeJob, heartbeatAgent } from "./store.js";
+import { addWatch, deleteWatch, readDb, saveSubscription, removeSubscription, updateWatch, queueWatchJobs, claimJobs, completeJob, heartbeatAgent, updateSettings, detectCategory } from "./store.js";
 import { checkProduct, validateProductUrl } from "./microcenter.js";
 import { notify, serviceStatus, startOptionalServices } from "./notifiers.js";
 
@@ -80,11 +80,14 @@ async function applyAgentResult(watch, payload) {
     lastChangedAt: changed ? checkedAt : watch.lastChangedAt,
     lastError: null,
     lastAgentAt: checkedAt,
-    history
+    history,
+    category: payload.category || (watch.category && watch.category !== "General" ? watch.category : detectCategory(result.title, watch.url)),
+    fulfillment: payload.fulfillment || watch.fulfillment || null,
+    nearbyStores: Array.isArray(payload.nearbyStores) ? payload.nearbyStores.slice(0, 12) : (watch.nearbyStores || [])
   };
 
   if (changed || priceChanged) {
-    const notifications = await notify({ ...result, category: watch.category || "Pokémon" }, { previousStatus, previousPrice });
+    const notifications = await notify({ ...result, category: payload.category || watch.category || detectCategory(result.title, watch.url) }, { previousStatus, previousPrice });
     patch.lastAlertAt = checkedAt;
     patch.alertCount = Number(watch.alertCount || 0) + 1;
     patch.lastNotifications = notifications;
@@ -92,6 +95,13 @@ async function applyAgentResult(watch, payload) {
   await updateWatch(watch.id, patch);
   return { ok: true, result, changed, becameAvailable, priceChanged };
 }
+
+app.get("/api/agent/sync", requireAgent, async (req, res) => {
+  const agentId = String(req.get("x-agent-id") || req.query.agentId || "anonymous-agent").slice(0, 100);
+  await heartbeatAgent(agentId, { name: req.get("x-agent-name") || "Chrome Extension", version: req.get("x-agent-version") || "unknown", userAgent: req.get("user-agent") || "" });
+  const db = await readDb();
+  res.json({ settings: db.settings || { homeZip: "" }, watches: db.watches.filter(w => w.enabled).map(w => ({ id: w.id, url: w.url, retailer: w.retailer, storeName: w.storeName, title: w.title, category: w.category })) });
+});
 
 app.get("/api/agent/jobs", requireAgent, async (req, res) => {
   const agentId = String(req.get("x-agent-id") || req.query.agentId || "anonymous-agent").slice(0, 100);
@@ -205,6 +215,7 @@ app.get("/api/dashboard", async (_req, res) => {
     agent: { configured: Boolean(config.agentApiKey), online: agentOnline, lastSeenAt: latestAgentAt, count: onlineAgents.length, agents: onlineAgents },
     jobs: { queued: db.jobs.filter(j => j.status === "queued").length, checking: db.jobs.filter(j => j.status === "claimed").length },
     watches: db.watches,
+    settings: db.settings || { homeZip: "" },
     subscriptions: db.subscriptions.length,
     services: serviceStatus()
   });
@@ -214,8 +225,12 @@ app.post("/api/watches", async (req, res) => {
   try {
     const url = validateProductUrl(req.body?.url || "");
     const added = await addWatch(url);
+    const patch = {};
+    if (typeof req.body?.title === "string" && req.body.title.trim()) patch.title = req.body.title.trim().slice(0, 250);
+    if (typeof req.body?.category === "string" && req.body.category.trim()) patch.category = req.body.category.trim().slice(0, 50);
+    if (Object.keys(patch).length) added.watch = await updateWatch(added.watch.id, patch);
     const checked = config.checkerMode === "agent"
-      ? { ok: false, pendingAgent: true }
+      ? { ok: false, pendingAgent: true, jobs: await queueWatchJobs([added.watch.id], "dashboard-add") }
       : await runCheck(added.watch);
     res.status(added.created ? 201 : 200).json({ ...added, checked });
   } catch (error) { res.status(400).json({ error: error.message }); }
@@ -259,6 +274,16 @@ app.post("/api/check-all", async (_req, res) => {
   res.json({ checked: results.length, successful: results.filter(r => r.ok).length, results });
 });
 
+app.patch("/api/settings", async (req, res) => {
+  const patch = {};
+  if (typeof req.body?.homeZip === "string") {
+    const zip = req.body.homeZip.trim();
+    if (zip && !/^\d{5}(?:-\d{4})?$/.test(zip)) return res.status(400).json({ error: "Enter a valid US ZIP code" });
+    patch.homeZip = zip;
+  }
+  res.json({ settings: await updateSettings(patch) });
+});
+
 app.get("/api/push/public-key", (_req, res) => {
   if (!serviceStatus().pushConfigured) return res.status(503).json({ error: "Browser push is not configured" });
   res.json({ publicKey: config.vapidPublicKey });
@@ -277,12 +302,12 @@ app.post("/api/push/unsubscribe", async (req, res) => {
 
 function testResultFromWatch(watch) {
   return watch ? {
-    title: watch.title || "Test Pokémon Product", url: watch.url, storeName: watch.storeName || config.storeName,
+    title: watch.title || "Test Retail Product", url: watch.url, storeName: watch.storeName || config.storeName,
     status: "in_stock", price: watch.price || "$59.99", sku: watch.sku || "TEST", image: watch.image || null,
-    category: watch.category || "Pokémon", checkedAt: new Date().toISOString()
+    category: payload.category || watch.category || detectCategory(result.title, watch.url), checkedAt: new Date().toISOString()
   } : {
-    title: "Test Pokémon Product", url: "https://www.microcenter.com/", storeName: config.storeName,
-    status: "in_stock", price: "$59.99", sku: "TEST", image: null, category: "Pokémon", checkedAt: new Date().toISOString()
+    title: "Test Retail Product", url: "https://www.microcenter.com/", storeName: config.storeName,
+    status: "in_stock", price: "$59.99", sku: "TEST", image: null, category: "General", checkedAt: new Date().toISOString()
   };
 }
 

@@ -13,6 +13,7 @@
     <nav>
       <a class="active" href="#products">▦ <span>Watched Products</span></a>
       <a href="#add">＋ <span>Add Product</span></a>
+      <a href="#settings">⚙ <span>Settings</span></a>
       <a href="#notifications">♢ <span>Notifications</span></a>
     </nav>
     <div class="side-tests" id="notifications">
@@ -49,6 +50,12 @@
       <p id="message"></p>
     </section>
 
+    <section class="add-panel settings-panel" id="settings">
+      <div><span class="eyebrow">LOCATION SETTINGS</span><h2>Target nearby-store search</h2><p>Target results use the location visible in your signed-in Chrome session. This ZIP is sent to the extension as your preferred location and shown with store results.</p></div>
+      <form id="settingsForm"><input id="homeZip" inputmode="numeric" maxlength="10" placeholder="Home ZIP, e.g. 60647"><button class="primary">Save ZIP</button></form>
+      <p id="settingsMessage"></p>
+    </section>
+
     <section id="products">
       <div class="filterbar">
         <input id="search" type="search" placeholder="Search by product name or SKU…">
@@ -75,7 +82,7 @@
         <h3></h3>
         <span class="category"></span>
         <p class="meta"></p>
-        <p class="price"></p>
+        <p class="price"></p><div class="fulfillment"></div><div class="nearby-stores"></div>
       </div>
     </div>
     <div class="availability"></div>
@@ -89,6 +96,7 @@
     <div class="card-footer">
       <a class="product-link" target="_blank" rel="noopener">View Product ↗</a>
       <button class="check">Check Now</button>
+      <button class="edit-category">Edit Category</button>
       <button class="toggle">Pause</button>
       <button class="danger remove">Remove</button>
     </div>

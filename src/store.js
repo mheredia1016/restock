@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { config } from "./config.js";
 
 const dbFile = path.join(config.dataDir, "restock-db.json");
-let memoryDb = { watches: [], subscriptions: [], jobs: [], agents: [] };
+let memoryDb = { watches: [], subscriptions: [], jobs: [], agents: [], settings: { homeZip: "" } };
 let usingMemory = false;
 
 async function ensureDir() {
@@ -16,7 +16,8 @@ function normalizeDb(parsed = {}) {
     watches: Array.isArray(parsed.watches) ? parsed.watches : [],
     subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
     jobs: Array.isArray(parsed.jobs) ? parsed.jobs : [],
-    agents: Array.isArray(parsed.agents) ? parsed.agents : []
+    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
+    settings: parsed.settings && typeof parsed.settings === "object" ? parsed.settings : { homeZip: "" }
   };
 }
 export async function readDb() {
@@ -32,13 +33,24 @@ export async function writeDb(db) {
   await fs.writeFile(temp, JSON.stringify(normalized, null, 2));
   await fs.rename(temp, dbFile);
 }
+export function detectCategory(title = "", url = "") {
+  const text = `${title} ${url}`.toLowerCase();
+  if (/pokemon|pokémon|trading card|booster|elite trainer|tcg/.test(text)) return "Trading Cards";
+  if (/lego|building set|building blocks/.test(text)) return "LEGO";
+  if (/gpu|graphics card|geforce|radeon/.test(text)) return "GPUs";
+  if (/cpu|processor|ryzen|intel core/.test(text)) return "CPUs";
+  if (/console|playstation|xbox|nintendo switch|video game/.test(text)) return "Video Games";
+  if (/fidget|toy|squeezy|squish|doll|figure|plush/.test(text)) return "Toys";
+  if (/monitor|laptop|desktop|keyboard|mouse|electronics/.test(text)) return "Electronics";
+  return "General";
+}
 function retailerFromUrl(url) { try { const h = new URL(url).hostname; return /target\.com$/i.test(h) ? "Target" : "Micro Center"; } catch { return "Unknown"; } }
 export async function addWatch(url) {
   const db = await readDb();
   const existing = db.watches.find(w => w.url === url);
   if (existing) return { watch: existing, created: false };
   const retailer = retailerFromUrl(url);
-  const watch = { id: crypto.randomBytes(3).toString("hex"), url, retailer, storeName: retailer === "Target" ? "Target session location" : config.storeName, enabled: true, title: "Pending first check", status: "unknown", price: null, sku: null, image: null, availabilityText: null, source: null, pageUrl: url, httpStatus: null, lastSuccessfulAt: null, createdAt: new Date().toISOString(), lastCheckedAt: null, lastChangedAt: null, lastError: null, category: "Pokémon", lastAlertAt: null, alertCount: 0, history: [], checkState: null };
+  const watch = { id: crypto.randomBytes(3).toString("hex"), url, retailer, storeName: retailer === "Target" ? "Target session location" : config.storeName, enabled: true, title: "Pending first check", status: "unknown", price: null, sku: null, image: null, availabilityText: null, source: null, pageUrl: url, httpStatus: null, lastSuccessfulAt: null, createdAt: new Date().toISOString(), lastCheckedAt: null, lastChangedAt: null, lastError: null, category: detectCategory("", url), lastAlertAt: null, alertCount: 0, history: [], checkState: null };
   db.watches.push(watch); await writeDb(db); return { watch, created: true };
 }
 export async function updateWatch(id, patch) { const db = await readDb(); const watch = db.watches.find(w => w.id === id); if (!watch) return null; Object.assign(watch, patch); await writeDb(db); return watch; }
@@ -79,3 +91,5 @@ export async function heartbeatAgent(agentId, details = {}) {
   Object.assign(agent, { lastSeenAt: now, name: String(details.name || "Chrome Extension").slice(0, 100), version: String(details.version || "unknown").slice(0, 30), userAgent: String(details.userAgent || "").slice(0, 250) });
   await writeDb(db); return agent;
 }
+
+export async function updateSettings(patch) { const db = await readDb(); db.settings = { ...(db.settings || {}), ...patch }; await writeDb(db); return db.settings; }

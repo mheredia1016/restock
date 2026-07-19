@@ -64,11 +64,22 @@ function render(w) {
   n.querySelector(".id").textContent = `${retailer.toUpperCase()} • Watch #${w.id}`;
   n.querySelector("h3").textContent = w.title || "Pending first successful check";
   n.querySelector(".price").textContent = w.price || "Price unavailable";
-  n.querySelector(".category").textContent = w.category || "Pokémon";
+  n.querySelector(".category").textContent = w.category || "General";
   n.querySelector(".meta").textContent = [w.sku && `${retailer === "Target" ? "TCIN" : "SKU"}: ${w.sku}`, retailer, w.storeName, w.source].filter(Boolean).join(" • ") || "Waiting for product details";
   const availability = n.querySelector(".availability");
   availability.textContent = cleanAvailability(w.availabilityText, w.status, retailer);
   availability.className = `availability ${cls}`;
+  const fulfillment = n.querySelector(".fulfillment");
+  const f = w.fulfillment || {};
+  const bits = [];
+  if (f.shipping) bits.push(`<span><b>Shipping:</b> ${f.shipping}</span>`);
+  if (f.pickup) bits.push(`<span><b>Pickup:</b> ${f.pickup}</span>`);
+  fulfillment.innerHTML = bits.join("");
+  fulfillment.style.display = bits.length ? "flex" : "none";
+  const stores = Array.isArray(w.nearbyStores) ? w.nearbyStores : [];
+  const storesEl = n.querySelector(".nearby-stores");
+  storesEl.innerHTML = stores.length ? `<strong>Nearby Target stores${dashboard?.settings?.homeZip ? ` near ${dashboard.settings.homeZip}` : ""}</strong>${stores.slice(0,6).map(s => `<div><span>${s.name || "Target"}${s.distance ? ` • ${s.distance}` : ""}</span><b>${s.status || "Unknown"}</b></div>`).join("")}` : "";
+  storesEl.style.display = stores.length ? "block" : "none";
   n.querySelector(".checked").innerHTML = `<span>Last Checked</span><strong>${when(w.lastCheckedAt)}</strong>${w.lastError ? `<em>${w.lastError}</em>` : ""}`;
   n.querySelector(".alerted").innerHTML = `<span>Last Alert</span><strong>${when(w.lastAlertAt)}</strong><small>${Number(w.alertCount || 0)} alert${Number(w.alertCount || 0) === 1 ? "" : "s"}</small>`;
   n.querySelector(".alert-count").textContent = Number(w.alertCount || 0);
@@ -93,6 +104,7 @@ function render(w) {
     try { const r = await api(`/api/watches/${w.id}/check`, { method: "POST", body: "{}" }); toast(r.pendingAgent ? "Check queued. Chrome will pick it up within about 30 seconds." : "Product checked"); await load(); }
     catch (error) { toast(error.message); checkButton.disabled = false; checkButton.textContent = "Check Now"; }
   };
+  n.querySelector(".edit-category").onclick = async () => { const category = prompt("Category", w.category || "General"); if (category && category.trim()) { await api(`/api/watches/${w.id}`, { method: "PATCH", body: JSON.stringify({ category: category.trim() }) }); load(); } };
   n.querySelector(".toggle").textContent = w.enabled ? "Pause" : "Resume";
   n.querySelector(".toggle").onclick = async () => { await api(`/api/watches/${w.id}`, { method: "PATCH", body: JSON.stringify({ enabled: !w.enabled }) }); load(); };
   n.querySelector(".remove").onclick = async () => { if (confirm("Remove this watch?")) { await api(`/api/watches/${w.id}`, { method: "DELETE" }); load(); } };
@@ -107,7 +119,7 @@ function filteredWatches() {
     const text = `${w.title || ""} ${w.sku || ""}`.toLowerCase();
     return (!q || text.includes(q)) &&
       (els.statusFilter.value === "all" || statusValue === els.statusFilter.value) &&
-      (els.categoryFilter.value === "all" || (w.category || "Pokémon") === els.categoryFilter.value);
+      (els.categoryFilter.value === "all" || (w.category || "General") === els.categoryFilter.value);
   });
   rows.sort((a, b) => {
     if (els.sort.value === "name") return String(a.title || "").localeCompare(String(b.title || ""));
@@ -149,14 +161,16 @@ async function load() {
   els.agentStatus.className = d.agent?.online ? "online" : "offline";
   els.store.textContent = [...new Set(d.watches.map(retailerName))].join(" + ") || "Micro Center + Target";
   els.badges.innerHTML = badge(`Agent ${d.agent?.online ? "Online" : "Offline"}`, d.agent?.online) + badge(`Push ${d.services.pushConfigured ? "Ready" : "Off"}`, d.services.pushConfigured) + badge(`Email ${d.services.emailConfigured ? "Ready" : "Off"}`, d.services.emailConfigured) + badge(`Discord ${d.services.discordConnected ? "Connected" : "Off"}`, d.services.discordConnected);
-  const categories = [...new Set(d.watches.map(w => w.category || "Pokémon"))].sort();
+  const categories = [...new Set(d.watches.map(w => w.category || "General"))].sort();
   const current = els.categoryFilter.value;
   els.categoryFilter.innerHTML = `<option value="all">All categories</option>${categories.map(c => `<option value="${c}">${c}</option>`).join("")}`;
   if (categories.includes(current)) els.categoryFilter.value = current;
   renderGrid();
+  if (els.homeZip && document.activeElement !== els.homeZip) els.homeZip.value = d.settings?.homeZip || "";
   await pushUi(d.services.pushConfigured);
 }
 
+els.settingsForm.onsubmit = async e => { e.preventDefault(); els.settingsMessage.textContent = "Saving…"; try { await api("/api/settings", { method: "PATCH", body: JSON.stringify({ homeZip: els.homeZip.value }) }); els.settingsMessage.textContent = "ZIP saved. The extension will receive it automatically."; load(); } catch (err) { els.settingsMessage.textContent = err.message; } };
 els.form.onsubmit = async e => { e.preventDefault(); els.message.textContent = "Adding…"; try { await api("/api/watches", { method: "POST", body: JSON.stringify({ url: els.url.value }) }); els.url.value = ""; els.message.textContent = "Added. The home agent will check it shortly."; load(); } catch (err) { els.message.textContent = err.message; } };
 els.refresh.onclick = load;
 els.checkAll.onclick = async () => { els.checkAll.disabled = true; try { const r = await api("/api/check-all", { method: "POST", body: "{}" }); toast(r.pendingAgent ? `${r.queued || 0} product checks queued` : "All products checked"); load(); } finally { els.checkAll.disabled = false; } };
