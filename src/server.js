@@ -46,8 +46,9 @@ async function applyAgentResult(watch, payload) {
   const priceChanged = Boolean(previousPrice && payload.price && previousPrice !== payload.price);
 
   const result = {
-    title: payload.title || watch.title || "Micro Center Product",
+    title: payload.title || watch.title || `${payload.retailer || watch.retailer || "Retail"} Product`,
     url: watch.url,
+    retailer: payload.retailer || watch.retailer || (/target\.com/i.test(watch.url) ? "Target" : "Micro Center"),
     storeName: payload.storeName || watch.storeName || config.storeName,
     status,
     price: payload.price || null,
@@ -65,6 +66,7 @@ async function applyAgentResult(watch, payload) {
 
   const patch = {
     title: result.title,
+    retailer: result.retailer,
     status: result.status,
     price: result.price,
     sku: result.sku,
@@ -96,7 +98,7 @@ app.get("/api/agent/jobs", requireAgent, async (req, res) => {
   await heartbeatAgent(agentId, { name: req.get("x-agent-name") || "Chrome Extension", version: req.get("x-agent-version") || "unknown", userAgent: req.get("user-agent") || "" });
   const claimed = await claimJobs(agentId, 10);
   const db = await readDb();
-  res.json({ storeName: config.storeName, intervalSeconds: config.intervalSeconds, jobs: claimed, watches: db.watches.filter(w => w.enabled).map(w => ({ id: w.id, url: w.url, storeName: w.storeName || config.storeName, title: w.title })) });
+  res.json({ storeName: config.storeName, intervalSeconds: config.intervalSeconds, jobs: claimed, watches: db.watches.filter(w => w.enabled).map(w => ({ id: w.id, url: w.url, retailer: w.retailer || (/target\.com/i.test(w.url) ? "Target" : "Micro Center"), storeName: w.storeName || config.storeName, title: w.title })) });
 });
 
 app.post("/api/agent/heartbeat", requireAgent, async (req, res) => {
@@ -136,6 +138,8 @@ app.post("/api/agent/watches", requireAgent, async (req, res) => {
     const patch = {};
     if (req.body?.title) patch.title = String(req.body.title).slice(0, 250);
     if (req.body?.category) patch.category = String(req.body.category).slice(0, 50);
+    patch.retailer = /target\.com/i.test(url) ? "Target" : "Micro Center";
+    if (patch.retailer === "Target") patch.storeName = "Target session location";
     const watch = Object.keys(patch).length ? await updateWatch(added.watch.id, patch) : added.watch;
     res.status(added.created ? 201 : 200).json({ created: added.created, watch });
   } catch (error) { res.status(400).json({ error: error.message }); }

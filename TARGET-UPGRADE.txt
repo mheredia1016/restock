@@ -1,0 +1,13 @@
+RESTOCK DASHBOARD V9 - TARGET SUPPORT
+
+1. Replace the files in your GitHub repository with this ZIP's contents.
+2. Push/commit. Railway will redeploy.
+3. Your existing Railway volume and watches are preserved.
+4. The Add Product box now accepts both Micro Center and Target product URLs.
+5. Install the matching Chrome Extension V5 so Target pages can be checked from your normal Chrome session.
+
+Target notes:
+- Target availability is read from your active Target browser session.
+- The selected Target store/location in Chrome determines pickup availability.
+- The tracker also recognizes shipping/add-to-cart availability.
+- Target product IDs display as TCIN.

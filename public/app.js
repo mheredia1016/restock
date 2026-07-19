@@ -30,10 +30,11 @@ function status(w) {
   return ["Unknown", "neutral"];
 }
 function when(value) { return value ? new Date(value).toLocaleString() : "Never"; }
-function cleanAvailability(value, statusValue) {
+function retailerName(w) { return w.retailer || (/target\.com/i.test(w.url || "") ? "Target" : "Micro Center"); }
+function cleanAvailability(value, statusValue, retailer) {
   const raw = String(value || "").toLowerCase();
-  if (raw.includes("instock") || statusValue === "in_stock") return "Available at selected store";
-  if (raw.includes("outofstock") || statusValue === "out_of_stock") return "Currently unavailable at selected store";
+  if (raw.includes("instock") || statusValue === "in_stock") return retailer === "Target" ? (value || "Available for shipping or pickup") : "Available at selected store";
+  if (raw.includes("outofstock") || statusValue === "out_of_stock") return retailer === "Target" ? "Currently unavailable" : "Currently unavailable at selected store";
   return value ? String(value).replace(/^https?:\/\/schema\.org\//i, "").replace(/([a-z])([A-Z])/g, "$1 $2") : "Availability details unavailable";
 }
 function historyHtml(items = []) {
@@ -59,13 +60,14 @@ function render(w) {
   const statusEl = n.querySelector(".status");
   statusEl.textContent = label;
   statusEl.className = `status ${cls}`;
-  n.querySelector(".id").textContent = `Watch #${w.id}`;
+  const retailer = retailerName(w);
+  n.querySelector(".id").textContent = `${retailer.toUpperCase()} • Watch #${w.id}`;
   n.querySelector("h3").textContent = w.title || "Pending first successful check";
   n.querySelector(".price").textContent = w.price || "Price unavailable";
   n.querySelector(".category").textContent = w.category || "Pokémon";
-  n.querySelector(".meta").textContent = [w.sku && `SKU: ${w.sku}`, w.storeName, w.source].filter(Boolean).join(" • ") || "Waiting for product details";
+  n.querySelector(".meta").textContent = [w.sku && `${retailer === "Target" ? "TCIN" : "SKU"}: ${w.sku}`, retailer, w.storeName, w.source].filter(Boolean).join(" • ") || "Waiting for product details";
   const availability = n.querySelector(".availability");
-  availability.textContent = cleanAvailability(w.availabilityText, w.status);
+  availability.textContent = cleanAvailability(w.availabilityText, w.status, retailer);
   availability.className = `availability ${cls}`;
   n.querySelector(".checked").innerHTML = `<span>Last Checked</span><strong>${when(w.lastCheckedAt)}</strong>${w.lastError ? `<em>${w.lastError}</em>` : ""}`;
   n.querySelector(".alerted").innerHTML = `<span>Last Alert</span><strong>${when(w.lastAlertAt)}</strong><small>${Number(w.alertCount || 0)} alert${Number(w.alertCount || 0) === 1 ? "" : "s"}</small>`;
@@ -145,7 +147,7 @@ async function load() {
   els.devices.textContent = d.subscriptions;
   els.agentStatus.textContent = d.agent?.online ? `Online${d.agent?.count ? ` (${d.agent.count})` : ""}` : "Offline";
   els.agentStatus.className = d.agent?.online ? "online" : "offline";
-  els.store.textContent = d.storeName;
+  els.store.textContent = [...new Set(d.watches.map(retailerName))].join(" + ") || "Micro Center + Target";
   els.badges.innerHTML = badge(`Agent ${d.agent?.online ? "Online" : "Offline"}`, d.agent?.online) + badge(`Push ${d.services.pushConfigured ? "Ready" : "Off"}`, d.services.pushConfigured) + badge(`Email ${d.services.emailConfigured ? "Ready" : "Off"}`, d.services.emailConfigured) + badge(`Discord ${d.services.discordConnected ? "Connected" : "Off"}`, d.services.discordConnected);
   const categories = [...new Set(d.watches.map(w => w.category || "Pokémon"))].sort();
   const current = els.categoryFilter.value;

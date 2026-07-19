@@ -32,11 +32,13 @@ export async function writeDb(db) {
   await fs.writeFile(temp, JSON.stringify(normalized, null, 2));
   await fs.rename(temp, dbFile);
 }
+function retailerFromUrl(url) { try { const h = new URL(url).hostname; return /target\.com$/i.test(h) ? "Target" : "Micro Center"; } catch { return "Unknown"; } }
 export async function addWatch(url) {
   const db = await readDb();
   const existing = db.watches.find(w => w.url === url);
   if (existing) return { watch: existing, created: false };
-  const watch = { id: crypto.randomBytes(3).toString("hex"), url, storeName: config.storeName, enabled: true, title: "Pending first check", status: "unknown", price: null, sku: null, image: null, availabilityText: null, source: null, pageUrl: url, httpStatus: null, lastSuccessfulAt: null, createdAt: new Date().toISOString(), lastCheckedAt: null, lastChangedAt: null, lastError: null, category: "Pokémon", lastAlertAt: null, alertCount: 0, history: [], checkState: null };
+  const retailer = retailerFromUrl(url);
+  const watch = { id: crypto.randomBytes(3).toString("hex"), url, retailer, storeName: retailer === "Target" ? "Target session location" : config.storeName, enabled: true, title: "Pending first check", status: "unknown", price: null, sku: null, image: null, availabilityText: null, source: null, pageUrl: url, httpStatus: null, lastSuccessfulAt: null, createdAt: new Date().toISOString(), lastCheckedAt: null, lastChangedAt: null, lastError: null, category: "Pokémon", lastAlertAt: null, alertCount: 0, history: [], checkState: null };
   db.watches.push(watch); await writeDb(db); return { watch, created: true };
 }
 export async function updateWatch(id, patch) { const db = await readDb(); const watch = db.watches.find(w => w.id === id); if (!watch) return null; Object.assign(watch, patch); await writeDb(db); return watch; }
@@ -51,7 +53,7 @@ export async function queueWatchJobs(watchIds, requestedBy = "dashboard") {
     if (!watch) continue;
     const existing = db.jobs.find(j => j.watchId === watchId && ["queued", "claimed"].includes(j.status));
     if (existing) { created.push(existing); continue; }
-    const job = { id: crypto.randomBytes(8).toString("hex"), watchId, url: watch.url, storeName: watch.storeName || config.storeName, title: watch.title, status: "queued", requestedBy, createdAt: now, claimedAt: null, claimedBy: null, completedAt: null, error: null };
+    const job = { id: crypto.randomBytes(8).toString("hex"), watchId, url: watch.url, retailer: watch.retailer || retailerFromUrl(watch.url), storeName: watch.storeName || config.storeName, title: watch.title, status: "queued", requestedBy, createdAt: now, claimedAt: null, claimedBy: null, completedAt: null, error: null };
     db.jobs.push(job); watch.checkState = { status: "queued", jobId: job.id, at: now }; created.push(job);
   }
   db.jobs = db.jobs.filter(j => Date.now() - new Date(j.createdAt).getTime() < 7 * 86400000);
