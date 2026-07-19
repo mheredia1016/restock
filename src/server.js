@@ -304,7 +304,7 @@ function testResultFromWatch(watch) {
   return watch ? {
     title: watch.title || "Test Retail Product", url: watch.url, storeName: watch.storeName || config.storeName,
     status: "in_stock", price: watch.price || "$59.99", sku: watch.sku || "TEST", image: watch.image || null,
-    category: payload.category || watch.category || detectCategory(result.title, watch.url), checkedAt: new Date().toISOString()
+    category: watch.category || detectCategory(watch.title || "Test Retail Product", watch.url), checkedAt: new Date().toISOString()
   } : {
     title: "Test Retail Product", url: "https://www.microcenter.com/", storeName: config.storeName,
     status: "in_stock", price: "$59.99", sku: "TEST", image: null, category: "General", checkedAt: new Date().toISOString()

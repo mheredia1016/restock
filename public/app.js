@@ -5,7 +5,8 @@ const els = {
   form: $("#addForm"), url: $("#url"), message: $("#message"), refresh: $("#refresh"), checkAll: $("#checkAll"),
   push: $("#push"), badges: $("#serviceBadges"), toast: $("#toast"), search: $("#search"),
   statusFilter: $("#statusFilter"), categoryFilter: $("#categoryFilter"), sort: $("#sort"),
-  testDiscord: $("#testDiscord"), testEmail: $("#testEmail"), testPush: $("#testPush")
+  testDiscord: $("#testDiscord"), testEmail: $("#testEmail"), testPush: $("#testPush"),
+  settingsForm: $("#settingsForm"), settingsMessage: $("#settingsMessage"), homeZip: $("#homeZip")
 };
 let dashboard = null;
 
@@ -170,8 +171,8 @@ async function load() {
   await pushUi(d.services.pushConfigured);
 }
 
-els.settingsForm.onsubmit = async e => { e.preventDefault(); els.settingsMessage.textContent = "Saving…"; try { await api("/api/settings", { method: "PATCH", body: JSON.stringify({ homeZip: els.homeZip.value }) }); els.settingsMessage.textContent = "ZIP saved. The extension will receive it automatically."; load(); } catch (err) { els.settingsMessage.textContent = err.message; } };
-els.form.onsubmit = async e => { e.preventDefault(); els.message.textContent = "Adding…"; try { await api("/api/watches", { method: "POST", body: JSON.stringify({ url: els.url.value }) }); els.url.value = ""; els.message.textContent = "Added. The home agent will check it shortly."; load(); } catch (err) { els.message.textContent = err.message; } };
+if (els.settingsForm) els.settingsForm.onsubmit = async e => { e.preventDefault(); els.settingsMessage.textContent = "Saving…"; try { await api("/api/settings", { method: "PATCH", body: JSON.stringify({ homeZip: els.homeZip.value }) }); els.settingsMessage.textContent = "ZIP saved. The extension will receive it automatically."; load(); } catch (err) { els.settingsMessage.textContent = err.message; } };
+if (els.form) els.form.onsubmit = async e => { e.preventDefault(); els.message.textContent = "Adding…"; try { const r = await api("/api/watches", { method: "POST", body: JSON.stringify({ url: els.url.value }) }); els.url.value = ""; els.message.textContent = r.checked?.pendingAgent ? "Added. The home agent will check it shortly." : "Added successfully."; await load(); } catch (err) { els.message.textContent = err.message; } };
 els.refresh.onclick = load;
 els.checkAll.onclick = async () => { els.checkAll.disabled = true; try { const r = await api("/api/check-all", { method: "POST", body: "{}" }); toast(r.pendingAgent ? `${r.queued || 0} product checks queued` : "All products checked"); load(); } finally { els.checkAll.disabled = false; } };
 async function testChannel(channel, label) {
