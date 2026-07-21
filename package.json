@@ -1,6 +1,6 @@
 {
   "name": "pokemon-restock-dashboard-v4-agent",
-  "version": "10.0.0",
+  "version": "10.0.2",
   "private": true,
   "type": "module",
   "description": "Railway dashboard with a residential home-browser checker agent",

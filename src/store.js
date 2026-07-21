@@ -6,6 +6,7 @@ import { config } from "./config.js";
 const dbFile = path.join(config.dataDir, "restock-db.json");
 let memoryDb = { watches: [], subscriptions: [], jobs: [], agents: [], settings: { homeZip: "" } };
 let usingMemory = false;
+let writeChain = Promise.resolve();
 
 async function ensureDir() {
   try { await fs.mkdir(config.dataDir, { recursive: true }); return true; }
@@ -29,9 +30,28 @@ export async function writeDb(db) {
   const normalized = normalizeDb(db);
   memoryDb = structuredClone(normalized);
   if (usingMemory || !(await ensureDir())) return;
-  const temp = `${dbFile}.tmp`;
-  await fs.writeFile(temp, JSON.stringify(normalized, null, 2));
-  await fs.rename(temp, dbFile);
+
+  // Heartbeats and product results can arrive at nearly the same time. The old
+  // implementation made every request use the same .tmp filename, so one
+  // request could rename it while another request was still expecting it.
+  // Serialize writes and use a unique temporary file for each write.
+  const payload = JSON.stringify(normalized, null, 2);
+  const runWrite = async () => {
+    const temp = `${dbFile}.${process.pid}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`;
+    try {
+      await fs.writeFile(temp, payload, "utf8");
+      await fs.rename(temp, dbFile);
+    } catch (error) {
+      try { await fs.unlink(temp); } catch {}
+      throw error;
+    }
+  };
+
+  const pending = writeChain.then(runWrite, runWrite);
+  writeChain = pending.catch(error => {
+    console.error("Database write failed:", error.message);
+  });
+  await pending;
 }
 export function detectCategory(title = "", url = "") {
   const text = `${title} ${url}`.toLowerCase();
